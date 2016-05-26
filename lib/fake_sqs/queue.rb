@@ -17,7 +17,7 @@ module FakeSQS
       @message_factory = options.fetch(:message_factory)
 
       @name = options.fetch("QueueName")
-      @arn = options.fetch("Arn") { "arn:aws:sqs:eu-west-1:#{SecureRandom.hex}:#{@name}" }
+      @arn = options.fetch("Arn") { "arn:aws:sqs:#{ENV['AWS_REGION'] || 'eu-west-1'}:#{ENV['AWS_ACCOUNT_ID'] || SecureRandom.hex}:#{@name}" }
       @queue_attributes = options.fetch("Attributes") { {} }
       @lock = Monitor.new
       reset
