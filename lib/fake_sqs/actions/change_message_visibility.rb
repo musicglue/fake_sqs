@@ -3,16 +3,17 @@ module FakeSQS
     class ChangeMessageVisibility
 
       def initialize(options = {})
-        @server    = options.fetch(:server)
         @queues    = options.fetch(:queues)
         @responder = options.fetch(:responder)
       end
 
-      def call(queue, params)
+      def call(queue_name, params)
+        queue = @queues.get(queue_name)
         visibility = params.fetch("VisibilityTimeout")
         receipt = params.fetch("ReceiptHandle")
 
-        @queues.get(queue).change_message_visibility( receipt, visibility.to_i )
+        queue.change_message_visibility(receipt, visibility.to_i)
+
         @responder.call :ChangeMessageVisibility
       end
 

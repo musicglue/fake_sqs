@@ -1,4 +1,5 @@
 require 'fake_sqs/actions/change_message_visibility'
+require 'fake_sqs/actions/change_message_visibility_batch'
 require 'fake_sqs/actions/create_queue'
 require 'fake_sqs/actions/delete_queue'
 require 'fake_sqs/actions/list_queues'
@@ -11,6 +12,7 @@ require 'fake_sqs/actions/purge_queue'
 require 'fake_sqs/actions/send_message_batch'
 require 'fake_sqs/actions/get_queue_attributes'
 require 'fake_sqs/actions/set_queue_attributes'
+require 'fake_sqs/actions/list_dead_letter_source_queues'
 
 module FakeSQS
 
@@ -23,23 +25,37 @@ module FakeSQS
     def initialize(options = {})
       @queues    = options.fetch(:queues)
       @options   = options
-      @run_timer = true
+      @halt      = false
       @timer     = Thread.new do
-        while @run_timer
+        until @halt
           queues.timeout_messages!
-          sleep(5)
+          sleep(0.1)
         end
       end
     end
 
-    def call(action, *args)
+    def call(action, request, *args)
       if FakeSQS::Actions.const_defined?(action)
-        action = FakeSQS::Actions.const_get(action).new(options)
-        queues.transaction do
-          action.call(*args)
+        action = FakeSQS::Actions.const_get(action).new(options.merge({:request => request}))
+        if action.respond_to?(:satisfied?)
+          result = nil
+          until @halt
+            result = attempt_once(action, *args)
+            break if action.satisfied?
+            sleep(0.1)
+          end
+          result
+        else
+          attempt_once(action, *args)
         end
       else
         fail InvalidAction, "Unknown (or not yet implemented) action: #{action}"
+      end
+    end
+
+    def attempt_once(action, *args)
+      queues.transaction do
+        action.call(*args)
       end
     end
 
@@ -54,7 +70,7 @@ module FakeSQS
     end
 
     def stop
-      @run_timer = false
+      @halt = true
     end
 
   end
